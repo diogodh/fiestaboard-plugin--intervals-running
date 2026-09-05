@@ -49,20 +49,27 @@ Available template variables:
 
 | Variable                                 | Example | Meaning                          |
 | ----------------------------------------- | ------- | --------------------------------- |
-| `{{intervals_running.distance_km}}`       | `842.3` | Lifetime running distance, km    |
-| `{{intervals_running.moving_time_hours}}` | `87.4`  | Lifetime running time, hours     |
+| `{{intervals_running.distance_km}}`       | `842`   | Lifetime running distance, km (rounded) |
+| `{{intervals_running.moving_time_hours}}` | `87:24` | Lifetime running time, hours:minutes    |
 | `{{intervals_running.avg_pace}}`          | `5:12`  | Average pace, minutes:seconds/km |
 | `{{intervals_running.run_count}}`         | `91`    | Number of runs recorded          |
 
-Example page layout:
+FiestaBoard also supports typing `{{blue}}`, `{{yellow}}`, `{{green}}`,
+`{{red}}`, `{{orange}}`, `{{violet}}`, `{{white}}`, or `{{black}}`
+directly into a page — each renders as one colored tile on the physical
+board (one tile = one character position). A compact layout that fits a
+15×3 Vestaboard Note, with a different color marking each stat:
 
 ```text
-INTERVALS.ICU RUNNING
-DISTANCE   {{intervals_running.distance_km}} KM
-TIME       {{intervals_running.moving_time_hours}} HRS
-AVG PACE   {{intervals_running.avg_pace}}/KM
-RUNS       {{intervals_running.run_count}}
+{{blue}} {{intervals_running.distance_km}} km
+{{yellow}} {{intervals_running.moving_time_hours}} {{green}} {{intervals_running.run_count}}x
+{{red}} {{intervals_running.avg_pace}}/km
 ```
+
+Which renders as three lines: a blue tile then "842 km"; a yellow tile,
+"87:24", a green tile, and "91x"; and a red tile then "5:12/km". Feel
+free to swap in whichever colors you like from the list above, or use
+the wider layout from the earlier examples if you have a larger board.
 
 ## Troubleshooting
 
