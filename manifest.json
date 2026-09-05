@@ -1,0 +1,78 @@
+{
+  "id": "intervals_running",
+  "name": "Intervals.icu Running Stats",
+  "version": "1.0.0",
+  "description": "Lifetime running distance, time, average pace and run count from your Intervals.icu account",
+  "author": "Diogo",
+  "icon": "footprints",
+  "category": "data",
+  "repository": "https://github.com/diogodh/fiestaboard-plugin--intervals-running",
+  "settings_schema": {
+    "type": "object",
+    "properties": {
+      "athlete_id": {
+        "type": "string",
+        "title": "Intervals.icu Athlete ID",
+        "description": "Your athlete id, e.g. i1234567. You can also just use \"0\", which always means \"the account this API key belongs to\".",
+        "default": "0"
+      },
+      "api_key": {
+        "type": "string",
+        "title": "Intervals.icu API Key",
+        "description": "Generate this at intervals.icu under Settings > Developer Settings",
+        "ui:widget": "password"
+      },
+      "refresh_seconds": {
+        "type": "integer",
+        "title": "Refresh Interval (seconds)",
+        "description": "How often to re-fetch stats from Intervals.icu",
+        "default": 3600,
+        "minimum": 900,
+        "maximum": 86400
+      }
+    },
+    "required": ["athlete_id", "api_key"]
+  },
+  "variables": {
+    "simple": ["distance_km", "moving_time_hours", "avg_pace", "run_count"]
+  },
+  "max_lengths": {
+    "distance_km": 8,
+    "moving_time_hours": 6,
+    "avg_pace": 5,
+    "run_count": 5
+  },
+  "teaser": "842KM 91 RUNS",
+  "previews": [
+    {
+      "device_type": "flagship",
+      "rows": [
+        "INTERVALS.ICU RUNNING",
+        "DISTANCE   842.3 KM",
+        "TIME        87.4 HRS",
+        "AVG PACE    5:12/KM",
+        "RUNS             91"
+      ]
+    },
+    {
+      "device_type": "note",
+      "rows": [
+        "INTERVALS STATS",
+        "842.3KM  91RUN",
+        "PACE 5:12/KM"
+      ]
+    }
+  ],
+  "env_vars": [
+    {
+      "name": "INTERVALS_ATHLETE_ID",
+      "required": false,
+      "description": "Intervals.icu athlete id, e.g. i1234567 or 0 for yourself (fallback if not set in the web UI)"
+    },
+    {
+      "name": "INTERVALS_API_KEY",
+      "required": false,
+      "description": "Intervals.icu API key from Settings > Developer Settings (fallback if not set in the web UI)"
+    }
+  ]
+}
