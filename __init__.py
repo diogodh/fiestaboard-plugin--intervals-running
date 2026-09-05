@@ -61,6 +61,13 @@ class IntervalsRunningPlugin(PluginBase):
         return errors
 
     @staticmethod
+    def _format_duration_hm(moving_time_seconds: float) -> str:
+        """Format total moving time as H:MM (hours:minutes), e.g. '87:24'."""
+        total_minutes = int(round(moving_time_seconds / 60))
+        hours, minutes = divmod(total_minutes, 60)
+        return f"{hours}:{minutes:02d}"
+
+    @staticmethod
     def _format_pace(moving_time_seconds: float, distance_meters: float) -> str:
         """Format average pace as M:SS per kilometer."""
         if not distance_meters:
@@ -148,8 +155,8 @@ class IntervalsRunningPlugin(PluginBase):
                 moving_time_seconds += category.get("moving_time") or 0
 
             data = {
-                "distance_km": f"{distance_meters / 1000:.1f}",
-                "moving_time_hours": f"{moving_time_seconds / 3600:.1f}",
+                "distance_km": f"{distance_meters / 1000:.0f}",
+                "moving_time_hours": self._format_duration_hm(moving_time_seconds),
                 "avg_pace": self._format_pace(moving_time_seconds, distance_meters),
                 "run_count": str(run_count),
             }

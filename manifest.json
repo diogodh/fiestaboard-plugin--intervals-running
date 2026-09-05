@@ -37,8 +37,8 @@
     "simple": ["distance_km", "moving_time_hours", "avg_pace", "run_count"]
   },
   "max_lengths": {
-    "distance_km": 8,
-    "moving_time_hours": 6,
+    "distance_km": 6,
+    "moving_time_hours": 7,
     "avg_pace": 5,
     "run_count": 5
   },
@@ -48,8 +48,8 @@
       "device_type": "flagship",
       "rows": [
         "INTERVALS.ICU RUNNING",
-        "DISTANCE   842.3 KM",
-        "TIME        87.4 HRS",
+        "DISTANCE      842 KM",
+        "TIME         87:24 H",
         "AVG PACE    5:12/KM",
         "RUNS             91"
       ]
@@ -57,9 +57,9 @@
     {
       "device_type": "note",
       "rows": [
-        "INTERVALS STATS",
-        "842.3KM  91RUN",
-        "PACE 5:12/KM"
+        "842 km",
+        "87:24  91x",
+        "5:12/km"
       ]
     }
   ],

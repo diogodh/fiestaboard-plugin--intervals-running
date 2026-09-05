@@ -41,8 +41,9 @@ This plugin:
    `__init__.py`) — each category entry already has `count`, `distance`
    (meters), and `moving_time` (seconds) pre-summed by Intervals.icu.
 4. Derives the board values:
-   - `distance_km` = `distance / 1000`, one decimal
-   - `moving_time_hours` = `moving_time / 3600`, one decimal
+   - `distance_km` = `distance / 1000`, rounded to a whole number
+   - `moving_time_hours` = `moving_time` formatted as `H:MM`
+     (hours:minutes, e.g. `87:24`)
    - `avg_pace` = `moving_time / (distance / 1000)`, formatted `M:SS`
    - `run_count` = the summed category counts
 
@@ -80,5 +81,5 @@ tiny fraction of that budget.
 
 - `manifest.json` — metadata, settings schema, declared variables
 - `__init__.py` — `IntervalsRunningPlugin(PluginBase)` implementation
-- `tests/` — pytest suite (92% line coverage on `__init__.py`)
+- `tests/` — pytest suite (93% line coverage on `__init__.py`)
 - `docs/SETUP.md` — user-facing setup guide
