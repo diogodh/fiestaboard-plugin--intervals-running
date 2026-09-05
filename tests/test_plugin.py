@@ -54,6 +54,26 @@ class TestValidateConfig:
         assert len(plugin.validate_config({})) == 2
 
 
+class TestFormatDurationHM:
+    def test_format_duration_exact_hours(self, plugin_module):
+        assert plugin_module.IntervalsRunningPlugin._format_duration_hm(10800) == "3:00"
+
+    def test_format_duration_with_minutes(self, plugin_module):
+        # 87h 24m = 314640s
+        assert plugin_module.IntervalsRunningPlugin._format_duration_hm(314640) == "87:24"
+
+    def test_format_duration_rounds_to_nearest_minute(self, plugin_module):
+        # 61s -> rounds up to 1 minute -> 0:01
+        assert plugin_module.IntervalsRunningPlugin._format_duration_hm(61) == "0:01"
+
+    def test_format_duration_zero(self, plugin_module):
+        assert plugin_module.IntervalsRunningPlugin._format_duration_hm(0) == "0:00"
+
+    def test_format_duration_minutes_roll_over_to_hour(self, plugin_module):
+        # 59m50s should round to 60 minutes -> 1:00, not 0:60
+        assert plugin_module.IntervalsRunningPlugin._format_duration_hm(3590) == "1:00"
+
+
 class TestFormatPace:
     def test_format_pace_normal(self, plugin_module):
         assert plugin_module.IntervalsRunningPlugin._format_pace(10800, 30000) == "6:00"
@@ -103,8 +123,8 @@ class TestFetchData:
         assert result.available is True
         assert result.error is None
         assert result.data["run_count"] == "3"
-        assert result.data["distance_km"] == "30.0"
-        assert result.data["moving_time_hours"] == "3.0"
+        assert result.data["distance_km"] == "30"
+        assert result.data["moving_time_hours"] == "3:00"
         assert result.data["avg_pace"] == "6:00"
 
     def test_fetch_data_uses_basic_auth_with_api_key_username(
@@ -145,7 +165,7 @@ class TestFetchData:
 
         assert result.available is True
         assert result.data["run_count"] == "0"
-        assert result.data["distance_km"] == "0.0"
+        assert result.data["distance_km"] == "0"
         assert result.data["avg_pace"] == "0:00"
 
     def test_fetch_data_missing_byCategory_key(
@@ -174,7 +194,7 @@ class TestFetchData:
 
         assert result.available is True
         assert result.data["run_count"] == "1"
-        assert result.data["distance_km"] == "0.0"
+        assert result.data["distance_km"] == "0"
 
     def test_fetch_data_missing_config_skips_network_call(
         self, plugin_module, sample_manifest
