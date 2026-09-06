@@ -37,7 +37,12 @@ GET /api/v1/athlete/{id}/activities?oldest=<Jan 1 of current year>&fields=type,d
    intervals.icu's own **Totals** page). `TrailRun` is intentionally
    excluded.
 3. Matching activities' `distance` (meters) and `moving_time` (seconds)
-   are summed, and counted for `run_count`.
+   are summed, and counted for `run_count`. The request explicitly sets
+   `limit=5000` — without it, the API silently caps how many activities
+   it returns per call, which under-counted a full year of activity for
+   an active athlete (real totals like 233 runs / 2,380 km showed up as
+   189 / 1,902 km). 5,000 comfortably covers any realistic single-year
+   activity count across all sports, not just running.
 4. Derives the board values:
    - `distance_km` = `distance / 1000`, rounded to a whole number
    - `moving_time_hours` = `moving_time` formatted as `H:MM`

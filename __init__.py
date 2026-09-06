@@ -93,6 +93,11 @@ class IntervalsRunningPlugin(PluginBase):
                 params={
                     "oldest": self._year_start(),
                     "fields": "type,distance,moving_time",
+                    # Without an explicit limit the API silently caps how many
+                    # activities it returns, which under-counted a full year
+                    # of activity for an active athlete. 5000 comfortably
+                    # covers any realistic single-year activity count.
+                    "limit": 5000,
                 },
                 # Intervals.icu personal API keys authenticate via HTTP Basic
                 # auth with the literal username "API_KEY".
