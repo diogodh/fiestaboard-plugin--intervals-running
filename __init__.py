@@ -1,27 +1,26 @@
 """Intervals.icu Running Stats plugin for FiestaBoard.
 
-Fetches the athlete's lifetime running totals from Intervals.icu and
-exposes them as board template variables, including a computed average
-pace.
+Fetches this year's running activities from Intervals.icu and aggregates
+them into year-to-date totals (distance, moving time, run count),
+including a computed average pace. Exposed as board template variables.
 
-Unlike Strava, Intervals.icu has no OAuth dance for personal use --
-authentication is a single long-lived API key (HTTP Basic auth, username
+Authentication is a single long-lived API key (HTTP Basic auth, username
 literally "API_KEY"). See
 https://forum.intervals.icu/t/api-access-to-intervals-icu/609
 
-Totals come from the athlete-summary endpoint
-(GET /api/v1/athlete/{id}/athlete-summary), which returns activity counts,
-distance and moving time pre-aggregated by sport category for a given date
-range -- confirmed against the official OpenAPI spec published at
-https://github.com/jcurbelo/intervals-icu-sdk/blob/main/spec/intervals-openapi.normalized.json
-(schemas SummaryWithCats / CategorySummary). This is one lightweight
-request instead of downloading and summing the athlete's entire activity
-history.
+Note on a previous approach: an earlier version of this plugin used the
+`athlete-summary` endpoint, assuming it returned one pre-aggregated row
+per athlete for an arbitrary date range. In practice it returns one row
+per day (a rolling summary), so picking a single row badly understated
+the totals. This version instead lists the athlete's activities directly
+(GET /api/v1/athlete/{id}/activities) and sums them itself, which is
+unambiguous -- each activity's own distance/moving_time is a real,
+individual value, not part of a rolling window.
 """
 
 import logging
 from datetime import date
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import requests
 
@@ -30,21 +29,16 @@ from src.plugins.base import PluginBase, PluginResult
 logger = logging.getLogger(__name__)
 
 INTERVALS_BASE_URL = "https://intervals.icu/api/v1"
-REQUEST_TIMEOUT = 10
+REQUEST_TIMEOUT = 15
 
-# Intervals.icu "category" values (CategorySummary.category in the OpenAPI
-# spec) that count as a run. Confirmed against the spec's enum -- note
-# there is no "Treadmill" category, despite what you might expect from
-# other platforms.
-RUNNING_CATEGORIES = {"Run", "TrailRun", "VirtualRun"}
-
-# Far enough back to capture a lifetime of activity in a single request.
-# If you started training before this date, push it back further.
-HISTORY_START = "2000-01-01"
+# Intervals.icu activity "type" values counted as a run for this board.
+# TrailRun is deliberately excluded to match how the totals are filtered
+# on intervals.icu's own Totals page ("Run, Virtual Run").
+RUNNING_TYPES = {"Run", "VirtualRun"}
 
 
 class IntervalsRunningPlugin(PluginBase):
-    """Fetches and aggregates lifetime running totals from Intervals.icu."""
+    """Fetches and aggregates this year's running totals from Intervals.icu."""
 
     @property
     def plugin_id(self) -> str:
@@ -59,6 +53,12 @@ class IntervalsRunningPlugin(PluginBase):
         if not config.get("api_key"):
             errors.append("Intervals.icu API Key is required")
         return errors
+
+    @staticmethod
+    def _year_start() -> str:
+        """ISO date for January 1st of the current year."""
+        today = date.today()
+        return date(today.year, 1, 1).isoformat()
 
     @staticmethod
     def _format_duration_hm(moving_time_seconds: float) -> str:
@@ -77,33 +77,8 @@ class IntervalsRunningPlugin(PluginBase):
         minutes, seconds = divmod(int(round(seconds_per_km)), 60)
         return f"{minutes}:{seconds:02d}"
 
-    @staticmethod
-    def _select_own_summary(
-        summaries: List[Dict[str, Any]], athlete_id: str
-    ) -> Optional[Dict[str, Any]]:
-        """Pick the summary entry that represents this athlete.
-
-        athlete-summary is designed for coaches and can return one entry
-        per followed athlete. For a personal (non-coaching) account there
-        is normally exactly one entry. If a real athlete id (not "0") was
-        configured, prefer matching it explicitly; otherwise fall back to
-        the first entry.
-        """
-        if not summaries:
-            return None
-        if len(summaries) == 1:
-            return summaries[0]
-        if athlete_id and athlete_id != "0":
-            wanted = athlete_id.lstrip("i")
-            for summary in summaries:
-                if str(summary.get("athlete_id", "")).lstrip("i") == wanted:
-                    return summary
-        # Ambiguous multi-athlete response with no explicit id to match --
-        # best effort, but see docs/SETUP.md for how to disambiguate.
-        return summaries[0]
-
     def fetch_data(self) -> PluginResult:
-        """Fetch the athlete's lifetime running totals."""
+        """Fetch this year's activities and aggregate running totals."""
         athlete_id = self.config.get("athlete_id")
         api_key = self.config.get("api_key")
 
@@ -114,10 +89,10 @@ class IntervalsRunningPlugin(PluginBase):
 
         try:
             response = requests.get(
-                f"{INTERVALS_BASE_URL}/athlete/{athlete_id}/athlete-summary",
+                f"{INTERVALS_BASE_URL}/athlete/{athlete_id}/activities",
                 params={
-                    "start": HISTORY_START,
-                    "end": date.today().isoformat(),
+                    "oldest": self._year_start(),
+                    "fields": "type,distance,moving_time",
                 },
                 # Intervals.icu personal API keys authenticate via HTTP Basic
                 # auth with the literal username "API_KEY".
@@ -125,34 +100,25 @@ class IntervalsRunningPlugin(PluginBase):
                 timeout=REQUEST_TIMEOUT,
             )
             response.raise_for_status()
-            summaries = response.json()
+            activities = response.json()
 
-            if not isinstance(summaries, list):
+            if not isinstance(activities, list):
                 return PluginResult(
                     available=False, error="Unexpected response from Intervals.icu"
                 )
-
-            own_summary = self._select_own_summary(summaries, athlete_id)
-            if own_summary is None:
-                return PluginResult(
-                    available=False,
-                    error="Intervals.icu returned no summary data for this athlete",
-                )
-
-            categories = own_summary.get("byCategory") or []
 
             distance_meters = 0.0
             moving_time_seconds = 0.0
             run_count = 0
 
-            for category in categories:
-                if not isinstance(category, dict):
+            for activity in activities:
+                if not isinstance(activity, dict):
                     continue
-                if category.get("category") not in RUNNING_CATEGORIES:
+                if activity.get("type") not in RUNNING_TYPES:
                     continue
-                run_count += category.get("count") or 0
-                distance_meters += category.get("distance") or 0
-                moving_time_seconds += category.get("moving_time") or 0
+                run_count += 1
+                distance_meters += activity.get("distance") or 0
+                moving_time_seconds += activity.get("moving_time") or 0
 
             data = {
                 "distance_km": f"{distance_meters / 1000:.0f}",

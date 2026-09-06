@@ -2,7 +2,7 @@
   "id": "intervals_running",
   "name": "Intervals.icu Running Stats",
   "version": "1.0.0",
-  "description": "Lifetime running distance, time, average pace and run count from your Intervals.icu account",
+  "description": "Year-to-date running distance, time, average pace and run count from your Intervals.icu account",
   "author": "Diogo",
   "icon": "footprints",
   "category": "data",
@@ -42,24 +42,24 @@
     "avg_pace": 5,
     "run_count": 5
   },
-  "teaser": "842KM 91 RUNS",
+  "teaser": "2467KM 246 RUNS",
   "previews": [
     {
       "device_type": "flagship",
       "rows": [
         "INTERVALS.ICU RUNNING",
-        "DISTANCE      842 KM",
-        "TIME         87:24 H",
-        "AVG PACE    5:12/KM",
-        "RUNS             91"
+        "DISTANCE     2467 KM",
+        "TIME        226:55 H",
+        "AVG PACE    5:31/KM",
+        "RUNS            246"
       ]
     },
     {
       "device_type": "note",
       "rows": [
-        "842 km",
-        "87:24  91x",
-        "5:12/km"
+        "2467 km",
+        "226:55  246x",
+        "5:31/km"
       ]
     }
   ],
