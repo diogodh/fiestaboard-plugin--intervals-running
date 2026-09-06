@@ -1,24 +1,22 @@
 """Tests for the Intervals.icu Running Stats plugin."""
 
 import json
+from datetime import date
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
 
-def _summary(athlete_id, categories):
-    return {"athlete_id": athlete_id, "byCategory": categories}
-
-
-RUN_CATEGORY = {"category": "Run", "count": 2, "distance": 15000, "moving_time": 5400}
-TRAIL_RUN_CATEGORY = {"category": "TrailRun", "count": 1, "distance": 15000, "moving_time": 5400}
-RIDE_CATEGORY = {"category": "Ride", "count": 5, "distance": 200000, "moving_time": 30000}
-
-# Totals across Run + TrailRun: 3 runs, 30000m, 10800s (3h) -> 6:00/km pace
-SINGLE_ATHLETE_RESPONSE = [
-    _summary("i123", [RUN_CATEGORY, TRAIL_RUN_CATEGORY, RIDE_CATEGORY])
+ACTIVITIES_RESPONSE = [
+    {"type": "Run", "distance": 10000, "moving_time": 3600},  # 10km in 1h
+    {"type": "Run", "distance": 5000, "moving_time": 1800},  # 5km in 30min
+    {"type": "Ride", "distance": 40000, "moving_time": 5400},  # not a run
+    {"type": "TrailRun", "distance": 15000, "moving_time": 5400},  # excluded on purpose
+    {"type": "VirtualRun", "distance": 15000, "moving_time": 5400},  # counts as a run
 ]
+# Expected totals: Run(10000+5000) + VirtualRun(15000) = 30000m, 3 activities
+# moving_time: 3600+1800+5400 = 10800s (3h) -> pace 10800/30 = 360s/km = 6:00
 
 
 def _make_plugin(plugin_module, manifest, config=None):
@@ -54,23 +52,30 @@ class TestValidateConfig:
         assert len(plugin.validate_config({})) == 2
 
 
+class TestYearStart:
+    def test_year_start_is_january_first_of_current_year(self, plugin_module):
+        expected = date(date.today().year, 1, 1).isoformat()
+        assert plugin_module.IntervalsRunningPlugin._year_start() == expected
+
+
 class TestFormatDurationHM:
     def test_format_duration_exact_hours(self, plugin_module):
         assert plugin_module.IntervalsRunningPlugin._format_duration_hm(10800) == "3:00"
 
     def test_format_duration_with_minutes(self, plugin_module):
-        # 87h 24m = 314640s
         assert plugin_module.IntervalsRunningPlugin._format_duration_hm(314640) == "87:24"
 
+    def test_format_duration_zero_padded_single_digit_minutes(self, plugin_module):
+        # 87h 4m = 313440s -> must be "87:04", not "87:4"
+        assert plugin_module.IntervalsRunningPlugin._format_duration_hm(313440) == "87:04"
+
     def test_format_duration_rounds_to_nearest_minute(self, plugin_module):
-        # 61s -> rounds up to 1 minute -> 0:01
         assert plugin_module.IntervalsRunningPlugin._format_duration_hm(61) == "0:01"
 
     def test_format_duration_zero(self, plugin_module):
         assert plugin_module.IntervalsRunningPlugin._format_duration_hm(0) == "0:00"
 
     def test_format_duration_minutes_roll_over_to_hour(self, plugin_module):
-        # 59m50s should round to 60 minutes -> 1:00, not 0:60
         assert plugin_module.IntervalsRunningPlugin._format_duration_hm(3590) == "1:00"
 
 
@@ -85,39 +90,14 @@ class TestFormatPace:
         assert plugin_module.IntervalsRunningPlugin._format_pace(0, 0) == "0:00"
 
 
-class TestSelectOwnSummary:
-    def test_empty_list_returns_none(self, plugin_module):
-        assert plugin_module.IntervalsRunningPlugin._select_own_summary([], "0") is None
-
-    def test_single_entry_is_used_regardless_of_id(self, plugin_module):
-        summaries = [_summary("i999", [])]
-        result = plugin_module.IntervalsRunningPlugin._select_own_summary(summaries, "0")
-        assert result["athlete_id"] == "i999"
-
-    def test_multiple_entries_matches_configured_athlete_id(self, plugin_module):
-        summaries = [_summary("i111", []), _summary("i222", [])]
-        result = plugin_module.IntervalsRunningPlugin._select_own_summary(summaries, "i222")
-        assert result["athlete_id"] == "i222"
-
-    def test_multiple_entries_matches_id_without_i_prefix(self, plugin_module):
-        summaries = [_summary("i111", []), _summary("i222", [])]
-        result = plugin_module.IntervalsRunningPlugin._select_own_summary(summaries, "222")
-        assert result["athlete_id"] == "i222"
-
-    def test_multiple_entries_falls_back_to_first_when_ambiguous(self, plugin_module):
-        summaries = [_summary("i111", []), _summary("i222", [])]
-        result = plugin_module.IntervalsRunningPlugin._select_own_summary(summaries, "0")
-        assert result["athlete_id"] == "i111"
-
-
 class TestFetchData:
-    def test_fetch_data_sums_running_categories_only(
+    def test_fetch_data_sums_run_and_virtualrun_only(
         self, plugin_module, sample_manifest, sample_config, mock_response
     ):
         plugin = _make_plugin(plugin_module, sample_manifest, sample_config)
 
         with patch.object(plugin_module.requests, "get") as mock_get:
-            mock_get.return_value = mock_response(SINGLE_ATHLETE_RESPONSE)
+            mock_get.return_value = mock_response(ACTIVITIES_RESPONSE)
             result = plugin.fetch_data()
 
         assert result.available is True
@@ -127,7 +107,22 @@ class TestFetchData:
         assert result.data["moving_time_hours"] == "3:00"
         assert result.data["avg_pace"] == "6:00"
 
-    def test_fetch_data_uses_basic_auth_with_api_key_username(
+    def test_fetch_data_excludes_trail_run(
+        self, plugin_module, sample_manifest, sample_config, mock_response
+    ):
+        """TrailRun must never be counted, per explicit user request."""
+        plugin = _make_plugin(plugin_module, sample_manifest, sample_config)
+        response = [{"type": "TrailRun", "distance": 99999, "moving_time": 99999}]
+
+        with patch.object(plugin_module.requests, "get") as mock_get:
+            mock_get.return_value = mock_response(response)
+            result = plugin.fetch_data()
+
+        assert result.available is True
+        assert result.data["run_count"] == "0"
+        assert result.data["distance_km"] == "0"
+
+    def test_fetch_data_uses_basic_auth_and_year_start(
         self, plugin_module, sample_manifest, sample_config, mock_response
     ):
         plugin = _make_plugin(plugin_module, sample_manifest, sample_config)
@@ -138,9 +133,9 @@ class TestFetchData:
 
         _, kwargs = mock_get.call_args
         assert kwargs["auth"] == ("API_KEY", sample_config["api_key"])
-        assert kwargs["params"]["start"] == plugin_module.HISTORY_START
+        assert kwargs["params"]["oldest"] == plugin_module.IntervalsRunningPlugin._year_start()
 
-    def test_fetch_data_empty_summary_list(
+    def test_fetch_data_empty_activity_list(
         self, plugin_module, sample_manifest, sample_config, mock_response
     ):
         plugin = _make_plugin(plugin_module, sample_manifest, sample_config)
@@ -149,47 +144,19 @@ class TestFetchData:
             mock_get.return_value = mock_response([])
             result = plugin.fetch_data()
 
-        assert result.available is False
-        assert result.error is not None
-
-    def test_fetch_data_no_running_categories(
-        self, plugin_module, sample_manifest, sample_config, mock_response
-    ):
-        """An athlete who has never logged a run should get clean zeros."""
-        plugin = _make_plugin(plugin_module, sample_manifest, sample_config)
-        response = [_summary("i123", [RIDE_CATEGORY])]
-
-        with patch.object(plugin_module.requests, "get") as mock_get:
-            mock_get.return_value = mock_response(response)
-            result = plugin.fetch_data()
-
         assert result.available is True
         assert result.data["run_count"] == "0"
         assert result.data["distance_km"] == "0"
         assert result.data["avg_pace"] == "0:00"
 
-    def test_fetch_data_missing_byCategory_key(
-        self, plugin_module, sample_manifest, sample_config, mock_response
-    ):
-        plugin = _make_plugin(plugin_module, sample_manifest, sample_config)
-        response = [{"athlete_id": "i123"}]  # no byCategory at all
-
-        with patch.object(plugin_module.requests, "get") as mock_get:
-            mock_get.return_value = mock_response(response)
-            result = plugin.fetch_data()
-
-        assert result.available is True
-        assert result.data["run_count"] == "0"
-
     def test_fetch_data_handles_null_fields_gracefully(
         self, plugin_module, sample_manifest, sample_config, mock_response
     ):
         plugin = _make_plugin(plugin_module, sample_manifest, sample_config)
-        category = {"category": "Run", "count": 1, "distance": None, "moving_time": None}
-        response = [_summary("i123", [category])]
+        activities = [{"type": "Run", "distance": None, "moving_time": None}]
 
         with patch.object(plugin_module.requests, "get") as mock_get:
-            mock_get.return_value = mock_response(response)
+            mock_get.return_value = mock_response(activities)
             result = plugin.fetch_data()
 
         assert result.available is True
@@ -240,18 +207,18 @@ class TestFetchData:
         assert result.available is False
         assert "Unexpected response" in result.error
 
-    def test_fetch_data_skips_non_dict_category_entries(
+    def test_fetch_data_skips_non_dict_entries(
         self, plugin_module, sample_manifest, sample_config, mock_response
     ):
         plugin = _make_plugin(plugin_module, sample_manifest, sample_config)
-        response = [_summary("i123", ["not-a-dict", RUN_CATEGORY])]
+        response = ["not-a-dict", {"type": "Run", "distance": 1000, "moving_time": 300}]
 
         with patch.object(plugin_module.requests, "get") as mock_get:
             mock_get.return_value = mock_response(response)
             result = plugin.fetch_data()
 
         assert result.available is True
-        assert result.data["run_count"] == "2"
+        assert result.data["run_count"] == "1"
 
 
 class TestManifestConsistency:
@@ -266,7 +233,7 @@ class TestManifestConsistency:
         plugin = _make_plugin(plugin_module, sample_manifest, sample_config)
 
         with patch.object(plugin_module.requests, "get") as mock_get:
-            mock_get.return_value = mock_response(SINGLE_ATHLETE_RESPONSE)
+            mock_get.return_value = mock_response(ACTIVITIES_RESPONSE)
             result = plugin.fetch_data()
 
         assert result.available
