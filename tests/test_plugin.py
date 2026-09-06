@@ -134,6 +134,7 @@ class TestFetchData:
         _, kwargs = mock_get.call_args
         assert kwargs["auth"] == ("API_KEY", sample_config["api_key"])
         assert kwargs["params"]["oldest"] == plugin_module.IntervalsRunningPlugin._year_start()
+        assert kwargs["params"]["limit"] >= 1000  # must not silently truncate a year of activity
 
     def test_fetch_data_empty_activity_list(
         self, plugin_module, sample_manifest, sample_config, mock_response
