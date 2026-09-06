@@ -49,10 +49,10 @@ Available template variables:
 
 | Variable                                 | Example | Meaning                          |
 | ----------------------------------------- | ------- | --------------------------------- |
-| `{{intervals_running.distance_km}}`       | `842`   | Lifetime running distance, km (rounded) |
-| `{{intervals_running.moving_time_hours}}` | `87:24` | Lifetime running time, hours:minutes    |
-| `{{intervals_running.avg_pace}}`          | `5:12`  | Average pace, minutes:seconds/km |
-| `{{intervals_running.run_count}}`         | `91`    | Number of runs recorded          |
+| `{{intervals_running.distance_km}}`       | `2467`  | Year-to-date running distance, km (rounded) |
+| `{{intervals_running.moving_time_hours}}` | `226:55`| Year-to-date running time, hours:minutes    |
+| `{{intervals_running.avg_pace}}`          | `5:31`  | Average pace, minutes:seconds/km |
+| `{{intervals_running.run_count}}`         | `246`   | Number of runs recorded this year (Run + VirtualRun) |
 
 FiestaBoard also supports typing `{{blue}}`, `{{yellow}}`, `{{green}}`,
 `{{red}}`, `{{orange}}`, `{{violet}}`, `{{white}}`, or `{{black}}`
